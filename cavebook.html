@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CaveBook">
+  <meta name="theme-color" content="#0f0c0c">
+  <title>CaveBook</title>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%230f0c0c'/%3E%3Cellipse cx='90' cy='148' rx='34' ry='22' fill='%238b1a1a'/%3E%3Crect x='72' y='80' width='36' height='70' rx='10' fill='%238b1a1a'/%3E%3Crect x='78' y='55' width='24' height='30' rx='6' fill='%23a52828'/%3E%3Crect x='82' y='38' width='16' height='22' rx='5' fill='%23c9a84c'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0f0c0c;color:#f0e8e0;font-family:'Inter',system-ui,sans-serif}
+    #root{min-height:100dvh}
+    .splash{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;gap:16px;background:#0f0c0c}
+    .splash-icon{font-size:3rem;animation:pulse 1.5s ease-in-out infinite}
+    .splash-title{font-family:'Inter',system-ui,sans-serif;font-size:1.4rem;font-weight:600;color:#c9a84c;letter-spacing:.04em}
+    .splash-sub{font-size:.75rem;color:#6b5050}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  </style>
+</head>
+<body>
+<div id="root">
+  <div class="splash">
+    <div class="splash-icon">&#127863;</div>
+    <div class="splash-title">CaveBook</div>
+    <div class="splash-sub" id="splash-sub">Chargement…</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var t=setTimeout(function(){
+    var el=document.getElementById('splash-sub');
+    if(el&&(el.textContent==='Chargement…'||el.textContent.indexOf('Connexion')>-1)){
+      el.innerHTML='⚠️ Chargement lent — <a href="javascript:location.reload()" style="color:#c9a84c;text-decoration:underline">Réessayer</a>';
+    }
+  },12000);
+  window.__splashTimer=t;
+  window.__cdnError=function(name){
+    var el=document.getElementById('splash-sub');
+    if(el) el.innerHTML='❌ Erreur CDN : '+name+'<br><a href="javascript:location.reload()" style="color:#c9a84c">Réessayer</a>';
+  };
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js" onerror="__cdnError('Supabase')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin onerror="__cdnError('React')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin onerror="__cdnError('ReactDOM')"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" onerror="__cdnError('Babel')"></script>
+<script type="text/babel" data-presets="react">
+/* ─── SUPABASE ─── */
+const SB_URL = 'https://lejkusbotacwmpzmfhwq.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxlamt1c2JvdGFjd21wem1maHdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxMTY3MjUsImV4cCI6MjEwODY5MjcyNX0.R5g63LTEAmygQNk_PfW7pXvxIxEVxVIe8INrv-GbXBY';
+const db = supabase.createClient(SB_URL, SB_KEY);
+
+/* ─── DATA MAPPERS ─── */
+const dbToWine = r => ({
+  id: r.id, name: r.name, appellation: r.appellation||'',
+  vintage: r.vintage, color: r.color||'red', region: r.region||'',
+  qty: r.qty||0, rating: r.rating||0, producer: r.producer||'',
+  grapes: r.grapes||'', price: parseFloat(r.price)||0,
+  img: r.img_url||null, origineType: r.origine_type||'caviste',
+  origineDetail: r.origine_detail||'', dateAchat: r.date_achat||null,
+  notes: r.notes||'', history: Array.isArray(r.history)?r.history:[],
+});
+const wineToDb = w => ({
+  id: String(w.id), name: w.name, appellation: w.appellation||'',
+  vintage: w.vintage, color: w.color||'red', region: w.region||'',
+  qty: w.qty||0, rating: w.rating||0, producer: w.producer||'',
+  grapes: w.grapes||'', price: w.price||0, img_url: w.img||null,
+  origine_type: w.origineType||'caviste', origine_detail: w.origineDetail||'',
+  date_achat: w.dateAchat||null, notes: w.notes||'', history: w.history||[],
+  updated_at: new Date().toISOString(),
+});
+const dbToTasting = r => ({
+  id: r.id, wineId: r.wine_id, wineName: r.wine_name,
+  wineAppellation: r.wine_appellation||'', wineVintage: r.wine_vintage,
+  wineColor: r.wine_color||'red', date: r.tasting_date,
+  companions: r.companions||'', rating: r.rating||0, notes: r.notes||'', qty: r.qty||1,
+});
+const tastingToDb = t => ({
+  id: String(t.id), wine_id: t.wineId?String(t.wineId):null,
+  wine_name: t.wineName, wine_appellation: t.wineAppellation||'',
+  wine_vintage: t.wineVintage, wine_color: t.wineColor||'red',
+  tasting_date: t.date, companions: t.companions||'',
+  rating: t.rating||0, notes: t.notes||'', qty: t.qty||1,
+});
+
+/* ─── STORAGE ─── */
+async function uploadPhoto(file, id) {
+  const ext = (file.type||'image/jpeg').split('/')[1]||'jpg';
+  const path = `${id}.${ext}`;
+  const { error } = await db.storage.from('labels').upload(path, file, { upsert:true, contentType:file.type });
+  if (error) throw error;
+  const { data } = db.storage.from('labels').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+/* ─── HELPERS ─── */
+const { useState, useEffect, useRef } = React;
+function uid() { return crypto.randomUUID ? crypto.randomUUID() : (Date.now()+Math.random()).toString(36); }
+function localGet(k,d) { try{const s=localStorage.getItem(k);return s?JSON.parse(s):d;}catch{return d;} }
+function localSet(k,v) { try{localStorage.setItem(k,JSON.stringify(v));}catch{} }
+
+/* ─── CONSTANTS ─── */
+const COLOR_LABEL  = {red:'Rouge',white:'Blanc',rose:'Rosé',sparkling:'Pétillant'};
+const COLOR_DOT    = {red:'dot-red',white:'dot-white',rose:'dot-rose',sparkling:'dot-sparkling'};
+const COLOR_TAG    = {red:'tag-red',white:'tag-white',rose:'tag-rose',sparkling:'tag-sparkling'};
+const ORIGINE_LABEL= {caviste:'Caviste',viticulteur:'Viticulteur',cadeau:'Cadeau',autre:'Autre'};
+const REGIONS      = ['Bordeaux','Bourgogne','Rhône','Loire','Champagne','Provence','Alsace','Languedoc','Étranger'];
+
+let _oi = 0;
+function simulateOCR(wines) {
+  const avail = wines.filter(w => w.qty > 0);
+  if (!avail.length) return null;
+  const w = avail[_oi % avail.length]; _oi++;
+  return { wine: w, confidence: 88 + Math.floor(Math.random()*11) };
+}
+
+/* ─── CSS ─── */
+const CSS = `
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0c0c;--bg2:#1a1414;--bg3:#221a1a;--card:#1e1818;
+  --border:#2e2222;--wine:#8b1a1a;--wine-m:rgba(139,26,26,.15);
+  --gold:#c9a84c;--gold-l:#e2c97e;--gold-m:rgba(201,168,76,.12);
+  --text:#f0e8e0;--text2:#a89080;--text3:#6b5050;
+  --r:12px;--sh:0 8px 32px rgba(0,0,0,.5);--nh:68px;--sw:220px
+}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-apple-system,sans-serif;min-height:100%;-webkit-tap-highlight-color:transparent}
+.app{display:flex;min-height:100dvh}
+
+/* SIDEBAR */
+.sidebar{width:var(--sw);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100}
+.sb-logo{padding:24px 20px 16px;border-bottom:1px solid var(--border)}
+.sb-logo h1{font-family:'Inter',system-ui,sans-serif;font-size:1.2rem;font-weight:700;color:var(--gold)}
+.sb-logo span{font-family:'Inter',system-ui,sans-serif;font-size:.72rem;color:var(--text3);letter-spacing:.12em;text-transform:uppercase}
+.sb-nav{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:3px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .18s;color:var(--text2);font-size:.85rem;border:none;background:none;text-align:left;width:100%}
+.nav-item:hover{background:var(--wine-m);color:var(--text)}
+.nav-item.active{background:var(--wine-m);color:var(--gold);font-weight:500}
+.sb-stats{padding:13px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+.stat-pill{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg3);border-radius:8px}
+.stat-pill-l{font-size:.66rem;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
+.stat-pill-v{font-size:.93rem;font-weight:600;color:var(--gold);font-family:'Inter',system-ui,sans-serif}
+.sync-row{display:flex;align-items:center;gap:7px;padding:4px 2px}
+.sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.sync-label{font-size:.63rem;color:var(--text3)}
+
+/* BOTTOM NAV */
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;background:var(--bg2);border-top:1px solid var(--border);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bnav-inner{display:flex;height:62px;width:100%}
+.bnav-item{flex:1;display:flex;align-items:center;justify-content:center;border:none;background:none;cursor:pointer;color:var(--text2);transition:all .15s;padding:0;font-family:'Inter',system-ui,sans-serif;font-size:.78rem;font-weight:500;letter-spacing:.07em;text-transform:uppercase}
+.bnav-item.active{color:var(--text);font-weight:700}
+.bnav-c{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0;border:none;background:none;cursor:pointer;padding:0 0 6px;overflow:visible}
+.bnav-btn{width:52px;height:52px;border-radius:50%;background:var(--gold);color:var(--bg);border:none;cursor:pointer;font-size:1.5rem;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(201,168,76,.45);transform:translateY(-14px);transition:transform .13s;flex-shrink:0}
+.bnav-btn:active{transform:translateY(-14px) scale(.91)}
+.bnav-icon{font-size:1.15rem;line-height:1}
+.bnav-lbl{font-size:.57rem;letter-spacing:.05em;text-transform:uppercase}
+
+/* MAIN */
+.main{margin-left:var(--sw);flex:1;min-height:100dvh;display:flex;flex-direction:column}
+.topbar{height:54px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 22px;position:sticky;top:0;z-index:50}
+.topbar-l{display:flex;align-items:center;gap:10px}
+.topbar-title{font-family:'Inter',system-ui,sans-serif;font-size:1.2rem;color:var(--text)}
+.topbar-title em{color:var(--gold);font-style:italic}
+.topbar-a{display:flex;gap:8px}
+.content{flex:1;padding:20px}
+
+/* BUTTONS */
+.btn{padding:9px 16px;border-radius:9px;border:none;cursor:pointer;font-family:'Inter',system-ui,sans-serif;font-size:.82rem;font-weight:500;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-gold{background:var(--gold);color:var(--bg);box-shadow:0 2px 12px rgba(201,168,76,.3)}
+.btn-gold:hover{background:var(--gold-l)}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
+.btn-sm{padding:6px 12px;font-size:.75rem}
+.btn-danger{background:rgba(139,26,26,.2);color:#e57373;border:1px solid rgba(139,26,26,.3)}
+.btn-sante{background:linear-gradient(135deg,#7b2d2d,#3d1a5e);color:#f0c070;border:1px solid rgba(240,192,112,.25);font-size:.9rem;padding:11px 18px;box-shadow:0 4px 18px rgba(80,20,80,.4)}
+.btn-sante:hover{background:linear-gradient(135deg,#8b3535,#4d2a6e);transform:translateY(-1px)}
+.btn-sante:active{transform:scale(.96)}
+.btn-sante:disabled{opacity:.4;pointer-events:none}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:15px 14px;position:relative;overflow:hidden}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--wine),var(--gold))}
+.kpi-lbl{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin-bottom:4px}
+.kpi-val{font-family:'Inter',system-ui,sans-serif;font-size:1.65rem;color:var(--gold);font-weight:700}
+.kpi-sub{font-size:.68rem;color:var(--text3);margin-top:2px}
+.kpi-icon{position:absolute;right:10px;top:11px;font-size:1.15rem;opacity:.2}
+
+/* DASHBOARD */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.dash-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:17px}
+.dash-card h3{font-family:'Inter',system-ui,sans-serif;font-size:.9rem;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:7px}
+.region-bar{display:flex;flex-direction:column;gap:8px}
+.region-row{display:flex;align-items:center;gap:8px}
+.region-name{font-size:.75rem;color:var(--text2);width:76px;flex-shrink:0}
+.bar-track{flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--wine),var(--gold));transition:width .5s}
+.region-ct{font-size:.75rem;color:var(--text3);width:20px;text-align:right}
+
+/* SCAN BANNER */
+.scan-banner{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(61,26,94,.35),rgba(139,26,26,.25));border:1px solid rgba(240,192,112,.2);border-radius:12px;padding:14px 16px;margin-bottom:13px;cursor:pointer;transition:all .18s;position:relative;overflow:hidden}
+.scan-banner::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(240,192,112,.05),transparent);pointer-events:none}
+.scan-banner:hover{border-color:rgba(240,192,112,.4)}
+.scan-banner:active{transform:scale(.98)}
+.sb-ico{font-size:2rem;flex-shrink:0}
+.sb-txt{flex:1}
+.sb-title{font-family:'Inter',system-ui,sans-serif;font-size:.95rem;color:var(--gold);margin-bottom:2px}
+.sb-sub{font-size:.72rem;color:var(--text3)}
+.sb-arr{font-size:1.1rem;color:var(--text3)}
+
+/* QUICK EXIT */
+.qe-list{display:flex;flex-direction:column;gap:7px}
+.qe-item{display:flex;align-items:center;gap:8px;background:var(--bg3);border-radius:9px;padding:9px 10px}
+.qe-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.qe-info{flex:1;min-width:0}
+.qe-name{font-size:.79rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qe-meta{font-size:.67rem;color:var(--text3)}
+.qe-qty{font-family:'Inter',system-ui,sans-serif;font-size:1.05rem;color:var(--gold);font-weight:700;min-width:24px;text-align:center}
+.qe-btn{width:32px;height:32px;border-radius:8px;border:1px solid rgba(139,26,26,.35);background:rgba(139,26,26,.12);color:#e07070;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0}
+.qe-btn:hover{background:rgba(139,26,26,.28)}
+.qe-btn:disabled{opacity:.3;cursor:not-allowed}
+.qe-btn:active:not(:disabled){transform:scale(.87)}
+.qe-sante{background:rgba(80,20,80,.18);border-color:rgba(240,192,112,.2);color:#f0c070;font-size:.85rem}
+.qe-sante:hover{background:rgba(80,20,80,.32)}
+
+/* ACTIVITY */
+.act-list{display:flex;flex-direction:column;gap:7px}
+.act-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px}
+.act-badge{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0}
+.b-in{background:rgba(74,140,106,.2);color:#6abf8e}
+.b-out{background:rgba(139,26,26,.2);color:#e07070}
+.b-sante{background:rgba(80,20,80,.25);color:#f0c070;font-size:.8rem}
+.act-name{font-size:.78rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-date{font-size:.67rem;color:var(--text3);white-space:nowrap}
+
+/* LIST CONTROLS */
+.list-controls{display:flex;gap:9px;margin-bottom:16px;align-items:center;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);border-radius:9px;padding:9px 12px;flex:1;min-width:140px}
+.search-box input{background:none;border:none;outline:none;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:.875rem;flex:1;min-width:0}
+.search-box input::placeholder{color:var(--text3)}
+.fsel{background:var(--card);border:1px solid var(--border);border-radius:9px;padding:9px 10px;color:var(--text2);font-family:'Inter',system-ui,sans-serif;font-size:.77rem;cursor:pointer;outline:none;-webkit-appearance:none}
+.fsel option{background:var(--card)}
+.view-toggle{display:flex;background:var(--card);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.vbtn{padding:8px 10px;cursor:pointer;background:none;border:none;color:var(--text3);transition:all .13s;font-size:.82rem}
+.vbtn.active{background:var(--wine-m);color:var(--gold)}
+
+/* WINE CARDS */
+.wine-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(172px,1fr));gap:12px}
+.wine-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .18s}
+.wine-card:hover{border-color:var(--wine);box-shadow:0 8px 28px rgba(0,0,0,.5)}
+.wine-card:active{transform:scale(.97)}
+.wc-img{height:125px;background:linear-gradient(160deg,var(--bg3),var(--bg2));display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.wc-img img{width:100%;height:100%;object-fit:cover;opacity:.85}
+.wc-ico{font-size:2.7rem;opacity:.36}
+.wc-dot{position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%}
+.dot-red{background:#9b2335;box-shadow:0 0 6px rgba(155,35,53,.7)}
+.dot-white{background:#c8b97a;box-shadow:0 0 6px rgba(200,185,122,.7)}
+.dot-rose{background:#e8a0b0;box-shadow:0 0 6px rgba(232,160,176,.7)}
+.dot-sparkling{background:#b8d4e8;box-shadow:0 0 6px rgba(184,212,232,.7)}
+.wc-body{padding:10px}
+.wc-name{font-family:'Inter',system-ui,sans-serif;font-size:.86rem;color:var(--text);margin-bottom:2px;line-height:1.25}
+.wc-meta{font-size:.67rem;color:var(--text3);margin-bottom:6px}
+.wc-foot{display:flex;justify-content:space-between;align-items:flex-end}
+.wc-qty{font-family:'Inter',system-ui,sans-serif;font-size:1.1rem;color:var(--gold);font-weight:700}
+.wc-qty-l{font-size:.58rem;color:var(--text3)}
+.stars{display:flex;gap:1px}
+.star{color:var(--gold);font-size:.58rem;opacity:.28}
+.star.on{opacity:1}
+
+/* TABLE */
+.wine-table{width:100%;border-collapse:collapse}
+.wine-table th{text-align:left;font-size:.63rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);padding:9px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+.wine-table td{padding:10px;border-bottom:1px solid rgba(46,34,34,.5);font-size:.79rem;color:var(--text2)}
+.wine-table tr:hover td{background:var(--wine-m);cursor:pointer}
+.wine-table td:first-child{color:var(--text);font-family:'Inter',system-ui,sans-serif}
+
+/* OVERLAY / DETAIL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:300;display:flex;justify-content:flex-end;animation:fadeIn .18s}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.detail-panel{width:460px;max-width:100vw;background:var(--bg2);height:100%;overflow-y:auto;border-left:1px solid var(--border);animation:slideIn .22s ease-out}
+@keyframes slideIn{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+.dp-header{min-height:165px;background:linear-gradient(160deg,var(--bg3),var(--bg));display:flex;align-items:flex-end;padding:15px;position:relative;border-bottom:1px solid var(--border)}
+.dp-header-bg{position:absolute;inset:0;opacity:.1;background:radial-gradient(ellipse at 30% 40%,var(--wine),transparent 70%)}
+.dp-header-c{position:relative;z-index:1;flex:1;padding-right:34px}
+.color-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:.66rem;margin-bottom:7px;letter-spacing:.06em}
+.tag-red{background:rgba(155,35,53,.2);color:#e07080;border:1px solid rgba(155,35,53,.3)}
+.tag-white{background:rgba(200,185,122,.15);color:#d4c080;border:1px solid rgba(200,185,122,.3)}
+.tag-rose{background:rgba(232,160,176,.15);color:#e8a0b0;border:1px solid rgba(232,160,176,.3)}
+.tag-sparkling{background:rgba(184,212,232,.15);color:#90c4da;border:1px solid rgba(184,212,232,.3)}
+.dp-name{font-family:'Inter',system-ui,sans-serif;font-size:1.28rem;color:var(--text);margin-bottom:2px}
+.dp-vintage{font-family:'Inter',system-ui,sans-serif;font-size:1rem;color:var(--gold);font-weight:500}
+.dp-close{position:absolute;top:11px;right:11px;background:var(--bg3);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);font-size:.88rem;z-index:2;transition:all .13s}
+.dp-close:hover{border-color:var(--gold);color:var(--gold)}
+.dp-body{padding:17px}
+.dp-sec{margin-bottom:19px}
+.dp-sec-title{font-size:.63rem;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.dp-sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.ii{background:var(--bg3);border-radius:8px;padding:10px 11px}
+.ii.full{grid-column:1/-1}
+.ii-lbl{font-size:.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:3px}
+.ii-val{font-size:.82rem;color:var(--text);font-weight:500}
+.qty-ctrl{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.qty-btn{width:44px;height:44px;border-radius:9px;border:1px solid var(--border);background:var(--bg3);color:var(--text);cursor:pointer;font-size:1.4rem;display:flex;align-items:center;justify-content:center;transition:all .12s;-webkit-user-select:none;user-select:none}
+.qty-btn:hover{border-color:var(--gold);color:var(--gold)}
+.qty-btn:active{transform:scale(.87)}
+.qty-disp{font-family:'Inter',system-ui,sans-serif;font-size:2.2rem;color:var(--gold);min-width:48px;text-align:center}
+.notes-area{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:1rem;resize:vertical;min-height:74px;outline:none;transition:border-color .13s;line-height:1.6}
+.notes-area:focus{border-color:var(--wine)}
+.notes-area::placeholder{color:var(--text3)}
+.hist-list{display:flex;flex-direction:column;gap:7px}
+.hist-item{display:flex;gap:10px;align-items:flex-start}
+.hist-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+.hist-dot.in{background:#4a8c6a}
+.hist-dot.out{background:#8b1a1a}
+.hist-dot.sante{background:#b870e0}
+.hist-c{flex:1}
+.hist-action{font-size:.78rem;color:var(--text)}
+.hist-date{font-size:.67rem;color:var(--text3)}
+.rating-inp{display:flex;gap:6px}
+.r-star{font-size:1.4rem;cursor:pointer;color:var(--text3);transition:color .1s;-webkit-user-select:none;user-select:none}
+.r-star.on{color:var(--gold)}
+
+/* MODALS */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:500;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .18s}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:520px;padding:24px 22px 36px;animation:slideUp .22s ease-out;max-height:93dvh;overflow-y:auto}
+@keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 20px}
+.modal-title{font-family:'Inter',system-ui,sans-serif;font-size:1.2rem;color:var(--gold);margin-bottom:3px;text-align:center}
+.modal-sub{font-size:.78rem;color:var(--text3);text-align:center;margin-bottom:18px;font-family:'Inter',system-ui,sans-serif}
+
+/* SCAN MODAL */
+.scan-steps{display:flex;justify-content:center;gap:6px;margin-bottom:20px;align-items:center}
+.scan-step{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text3)}
+.scan-step-dot{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.65rem;background:var(--bg3);flex-shrink:0;transition:all .2s}
+.scan-step.done .scan-step-dot{background:#3d8b5e;border-color:#3d8b5e;color:#fff}
+.scan-step.active .scan-step-dot{border-color:var(--gold);color:var(--gold);background:var(--gold-m)}
+.scan-step-line{width:28px;height:1px;background:var(--border)}
+.photo-zone{border:2px dashed var(--border);border-radius:12px;background:var(--bg3);position:relative;overflow:hidden;cursor:pointer;transition:all .2s;min-height:170px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.photo-zone:hover{border-color:var(--gold);background:var(--gold-m)}
+.photo-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.photo-zone-ico{font-size:3rem;opacity:.5}
+.photo-zone-lbl{font-size:.85rem;color:var(--text3);text-align:center;line-height:1.5}
+.photo-zone-hint{font-size:.72rem;color:var(--text3);opacity:.7}
+.scan-preview{width:100%;height:190px;object-fit:cover;border-radius:10px;display:block}
+.scan-preview-wrap{position:relative}
+.scan-overlay{position:absolute;inset:0;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5)}
+.scan-line{position:absolute;left:10px;right:10px;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);border-radius:1px;animation:scanLine 1.4s ease-in-out infinite;top:0}
+@keyframes scanLine{0%{top:10px;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:calc(100% - 12px);opacity:0}}
+.scan-corners{position:absolute;inset:8px;pointer-events:none}
+.scan-corner{position:absolute;width:20px;height:20px;border-color:var(--gold);border-style:solid;border-width:0}
+.sc-tl{top:0;left:0;border-top-width:2px;border-left-width:2px;border-radius:3px 0 0 0}
+.sc-tr{top:0;right:0;border-top-width:2px;border-right-width:2px;border-radius:0 3px 0 0}
+.sc-bl{bottom:0;left:0;border-bottom-width:2px;border-left-width:2px;border-radius:0 0 0 3px}
+.sc-br{bottom:0;right:0;border-bottom-width:2px;border-right-width:2px;border-radius:0 0 3px 0}
+.scan-status{text-align:center;padding:14px 0 4px;font-size:.82rem}
+.scan-analyzing{color:var(--gold);display:flex;align-items:center;justify-content:center;gap:8px}
+.spin{display:inline-block;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scan-result{background:var(--bg3);border-radius:12px;border:1px solid var(--border);overflow:hidden;margin-top:4px}
+.sr-head{padding:12px 14px 10px;display:flex;align-items:center;gap:10px}
+.sr-thumb{width:42px;height:52px;background:linear-gradient(160deg,var(--bg2),var(--bg));border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;border:1px solid var(--border);overflow:hidden}
+.sr-thumb img{width:100%;height:100%;object-fit:cover}
+.sr-info{flex:1;min-width:0}
+.sr-name{font-family:'Inter',system-ui,sans-serif;font-size:1rem;color:var(--text);margin-bottom:2px}
+.sr-meta{font-size:.72rem;color:var(--text3)}
+.sr-qty{background:var(--wine-m);border-radius:8px;padding:5px 12px;font-family:'Inter',system-ui,sans-serif;font-size:1.1rem;color:var(--gold);font-weight:700;text-align:center;flex-shrink:0}
+.sr-conf{display:flex;align-items:center;gap:6px;padding:8px 14px;border-top:1px solid var(--border);background:rgba(201,168,76,.05)}
+.conf-bar{flex:1;height:4px;background:var(--bg2);border-radius:2px;overflow:hidden}
+.conf-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--wine),var(--gold));transition:width .5s .1s}
+.conf-lbl{font-size:.68rem;color:var(--text3);white-space:nowrap}
+.sr-actions{display:flex;gap:9px;padding:12px 14px 14px}
+.sr-actions .btn{flex:1;justify-content:center;font-size:.82rem;padding:10px 8px}
+
+/* SANTE MODAL */
+.wine-badge{display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:10px;padding:11px 14px;margin-bottom:18px;border:1px solid var(--border)}
+.wb-name{font-family:'Inter',system-ui,sans-serif;font-size:.95rem;color:var(--text);flex:1}
+.wb-vintage{font-size:.8rem;color:var(--gold)}
+.modal-fields{display:flex;flex-direction:column;gap:14px}
+.mf{display:flex;flex-direction:column;gap:6px}
+.mf-lbl{font-size:.67rem;text-transform:uppercase;letter-spacing:.09em;color:var(--text3)}
+.minput{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 13px;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:1rem;outline:none;transition:border-color .13s;width:100%;-webkit-appearance:none}
+.minput:focus{border-color:var(--gold)}
+.mtarea{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px 13px;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:1rem;outline:none;width:100%;min-height:76px;resize:vertical;line-height:1.6;transition:border-color .13s}
+.mtarea:focus{border-color:var(--gold)}
+.mtarea::placeholder{color:var(--text3)}
+.mrating{display:flex;gap:8px}
+.mstar{font-size:1.7rem;cursor:pointer;color:var(--text3);transition:color .1s;-webkit-user-select:none;user-select:none}
+.mstar.on{color:var(--gold)}
+.modal-actions{display:flex;gap:10px;margin-top:22px}
+.modal-actions .btn{flex:1;justify-content:center;padding:14px;font-size:.9rem}
+
+/* TASTINGS */
+.tlist{display:flex;flex-direction:column;gap:13px}
+.tcard{background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.tc-head{padding:13px 15px 10px;display:flex;align-items:flex-start;gap:11px}
+.tc-head-info{flex:1;min-width:0}
+.tc-name{font-family:'Inter',system-ui,sans-serif;font-size:.98rem;color:var(--text);margin-bottom:3px}
+.tc-meta{font-size:.7rem;color:var(--text3);display:flex;gap:9px;flex-wrap:wrap}
+.tc-stars{display:flex;gap:1px;margin-top:4px}
+.t-star{font-size:.7rem;color:var(--gold);opacity:.25}
+.t-star.on{opacity:1}
+.tc-body{padding:0 15px 13px}
+.tc-companions{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:8px}
+.tc-notes{font-family:'Inter',system-ui,sans-serif;font-size:.97rem;color:var(--text2);line-height:1.6}
+.tc-div{height:1px;background:var(--border);margin:0 15px}
+.t-empty{text-align:center;padding:48px 20px}
+.t-empty-ico{font-size:2.8rem;opacity:.22;margin-bottom:13px}
+.t-filters{display:flex;gap:7px;margin-bottom:15px;flex-wrap:wrap}
+.t-chip{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);font-size:.76rem;cursor:pointer;transition:all .13s;font-family:'Inter',system-ui,sans-serif}
+.t-chip.active{background:var(--wine-m);border-color:var(--wine);color:var(--text)}
+
+/* ADD FORM */
+.form-wrap{max-width:580px}
+.form-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:20px}
+.form-title{font-family:'Inter',system-ui,sans-serif;font-size:1.1rem;color:var(--gold);margin-bottom:17px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.ff{display:flex;flex-direction:column;gap:5px}
+.ff.full{grid-column:1/-1}
+.fl{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+.fi{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px 12px;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:.9rem;outline:none;transition:border-color .13s;width:100%;-webkit-appearance:none}
+.fi:focus{border-color:var(--wine)}
+.fsel2{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:11px 12px;color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:.9rem;outline:none;cursor:pointer;width:100%;-webkit-appearance:none}
+.fsel2 option{background:var(--bg3)}
+.origine-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.ob{padding:7px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text3);font-size:.76rem;cursor:pointer;transition:all .13s;font-family:'Inter',system-ui,sans-serif;white-space:nowrap}
+.ob.sel{background:var(--wine-m);border-color:var(--wine);color:var(--text)}
+.pzone{border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .18s;background:var(--bg3);position:relative;overflow:hidden}
+.pzone:hover{border-color:var(--wine);background:var(--wine-m)}
+.pzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.pzone-ico{font-size:1.7rem;margin-bottom:5px;opacity:.4}
+.pzone-lbl{font-size:.78rem;color:var(--text3)}
+.pzone-preview{width:68px;height:68px;object-fit:cover;border-radius:7px;margin:0 auto 6px;display:block}
+.scan-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:20px;background:var(--gold-m);border:1px solid rgba(201,168,76,.3);color:var(--gold);font-size:.72rem;cursor:pointer}
+.scanning{animation:pulse 1s infinite}
+.form-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+/* MISC */
+.empty-state{text-align:center;padding:50px 20px;color:var(--text3)}
+.empty-ico{font-size:2.6rem;margin-bottom:13px;opacity:.27}
+.empty-state h3{font-family:'Inter',system-ui,sans-serif;font-size:1rem;color:var(--text2);margin-bottom:6px}
+.toast{position:fixed;bottom:calc(var(--nh) + 16px);left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 18px;display:flex;align-items:center;gap:9px;box-shadow:var(--sh);z-index:999;animation:toastIn .22s ease-out;font-size:.82rem;white-space:nowrap}
+@keyframes toastIn{from{transform:translateX(-50%) translateY(12px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+
+/* RESPONSIVE TABLET */
+@media (min-width:769px) and (max-width:1100px){
+  :root{--sw:188px}
+  .content{padding:16px}
+  .topbar{padding:0 16px}
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .kpi-val{font-size:1.45rem}
+  .kpi-icon{display:none}
+  .dash-grid{grid-template-columns:1fr;gap:12px}
+  .wine-grid{grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px}
+  .wc-img{height:115px}
+  .form-wrap{max-width:100%}
+  .detail-panel{width:420px}
+}
+/* RESPONSIVE MOBILE */
+@media (max-width:768px){
+  :root{--nh:62px}
+  .sidebar{display:none}
+  .bnav{display:flex}
+  .main{margin-left:0;padding-bottom:calc(var(--nh) + env(safe-area-inset-bottom,0px))}
+  .topbar{padding:0 14px;padding-top:env(safe-area-inset-top,0px);height:calc(52px + env(safe-area-inset-top,0px))}
+  .topbar-title{font-size:1rem}
+  .content{padding:12px}
+  .kpi-grid{grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px}
+  .kpi-val{font-size:1.4rem}
+  .kpi-icon{display:none}
+  .dash-grid{grid-template-columns:1fr;gap:11px}
+  .list-controls{flex-wrap:wrap;gap:7px}
+  .search-box{flex:1 1 100%;order:-1}
+  .fsel{flex:1;font-size:.75rem}
+  .wine-grid{grid-template-columns:1fr 1fr;gap:9px}
+  .wc-img{height:105px}
+  .wc-name{font-size:.8rem}
+  .wc-body{padding:9px}
+  .overlay{align-items:flex-end;justify-content:stretch}
+  .detail-panel{width:100vw;border-left:none;border-top:1px solid var(--border);border-radius:18px 18px 0 0;position:fixed;bottom:0;top:auto;height:91dvh;animation:slideUp .22s ease-out;overflow-y:auto}
+  .info-grid{grid-template-columns:1fr 1fr}
+  .qty-btn{width:48px;height:48px;font-size:1.5rem}
+  .form-wrap{max-width:100%}
+  .form-panel{border:none;border-radius:0;padding:14px;background:transparent}
+  .fg{grid-template-columns:1fr;gap:10px}
+  .ff.full{grid-column:1}
+  .form-actions{flex-direction:column-reverse}
+  .fi,.fsel2,.minput{font-size:1rem;padding:13px 12px}
+  .wine-table{font-size:.75rem}
+  .wine-table th,.wine-table td{padding:8px 9px}
+  .modal{border-radius:18px 18px 0 0;padding:20px 16px 30px}
+  .minput,.mtarea{font-size:1rem}
+  .mstar{font-size:2rem}
+  .toast{font-size:.76rem;bottom:calc(var(--nh) + env(safe-area-inset-bottom,0px) + 10px);max-width:90vw;white-space:normal;text-align:center}
+  .photo-zone{min-height:150px}
+}
+@media (max-width:390px){
+  .kpi-val{font-size:1.25rem}
+  .wine-grid{gap:7px}
+  .wc-img{height:92px}
+  .content{padding:9px}
+}
+`;
+
+/* ─── SYNC DOT ─── */
+function SyncDot({state}) {
+  const colors  = {online:'#4a8c6a',syncing:'#c9a84c',offline:'#8b1a1a'};
+  const tips    = {online:'Synchronisé avec Supabase',syncing:'Synchronisation…',offline:'Hors ligne — données locales'};
+  return (
+    <div title={tips[state]||''} className="sync-dot" style={{
+      background: colors[state]||'#6b5050',
+      boxShadow: state==='online'?'0 0 6px rgba(74,140,106,.6)':'none',
+      animation: state==='syncing'?'pulse 1s infinite':'none'
+    }}/>
+  );
+}
+
+/* ─── STARS ─── */
+function Stars({rating, onRate, size='1.4rem'}) {
+  const [h,setH] = useState(0);
+  return (
+    <div className="rating-inp">
+      {[1,2,3,4,5].map(i=>(
+        <span key={i} className={`r-star ${(h||rating)>=i?'on':''}`} style={{fontSize:size}}
+          onMouseEnter={()=>onRate&&setH(i)} onMouseLeave={()=>onRate&&setH(0)}
+          onClick={()=>onRate&&onRate(i)}>★</span>
+      ))}
+    </div>
+  );
+}
+
+/* ─── TOAST ─── */
+function Toast({msg,icon,onDone}) {
+  useEffect(()=>{const t=setTimeout(onDone,3000);return()=>clearTimeout(t);},[]);
+  return <div className="toast"><span>{icon}</span><span>{msg}</span></div>;
+}
+
+/* ─── SCAN EXIT MODAL ─── */
+function ScanExitModal({wines,onSimpleOut,onSante,onCancel}) {
+  const [step,setStep] = useState('photo');
+  const [imgSrc,setImgSrc] = useState(null);
+  const [match,setMatch] = useState(null);
+
+  const handleFile = e => {
+    const f = e.target.files?.[0]; if(!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      setImgSrc(ev.target.result); setStep('analyzing');
+      setTimeout(()=>{
+        const res = simulateOCR(wines);
+        if(res){setMatch(res);setStep('result');} else setStep('notfound');
+      },2200);
+    };
+    r.readAsDataURL(f);
+  };
+  const reset = () => {setStep('photo');setImgSrc(null);setMatch(null);};
+  const stepN = {photo:1,analyzing:2,result:3,notfound:3};
+
+  return (
+    <div className="modal-ov" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+      <div className="modal">
+        <div className="modal-handle"/>
+        <div className="modal-title">Scanner une étiquette</div>
+        <div className="modal-sub">Photographiez l'étiquette pour identifier le vin</div>
+        <div className="scan-steps">
+          {[['1','Photo'],['2','Analyse'],['3','Résultat']].map(([n,l],i)=>(
+            <React.Fragment key={n}>
+              {i>0&&<div className="scan-step-line"/>}
+              <div className={`scan-step ${stepN[step]>i+1?'done':stepN[step]===i+1?'active':''}`}>
+                <div className="scan-step-dot">{stepN[step]>i+1?'✓':n}</div>
+                <span style={{fontSize:'.67rem'}}>{l}</span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+
+        {step==='photo'&&(
+          <div>
+            <div className="photo-zone">
+              <input type="file" accept="image/*" capture="environment" onChange={handleFile}/>
+              <div className="photo-zone-ico">📷</div>
+              <div className="photo-zone-lbl">Appuyer pour photographier l'étiquette</div>
+              <div className="photo-zone-hint">L'analyse est locale — fonctionne hors ligne</div>
+            </div>
+            <div style={{marginTop:14,display:'flex',gap:9}}>
+              <button className="btn btn-ghost" style={{flex:1,justifyContent:'center'}} onClick={onCancel}>Annuler</button>
+            </div>
+          </div>
+        )}
+
+        {step==='analyzing'&&(
+          <div>
+            <div className="scan-preview-wrap">
+              <img src={imgSrc} alt="" className="scan-preview"/>
+              <div className="scan-overlay">
+                <div className="scan-corners">
+                  <div className="scan-corner sc-tl"/><div className="scan-corner sc-tr"/>
+                  <div className="scan-corner sc-bl"/><div className="scan-corner sc-br"/>
+                </div>
+                <div className="scan-line"/>
+              </div>
+            </div>
+            <div className="scan-status scan-analyzing"><span className="spin">⏳</span>Analyse OCR en cours…</div>
+          </div>
+        )}
+
+        {step==='result'&&match&&(
+          <div>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+              <span style={{fontSize:'.78rem',color:'#6abf8e'}}>✓ Vin identifié avec {match.confidence}% de confiance</span>
+            </div>
+            <div className="scan-result">
+              <div className="sr-head">
+                <div className="sr-thumb">{match.wine.img?<img src={match.wine.img} alt=""/>:''}</div>
+                <div className="sr-info">
+                  <div className="sr-name">{match.wine.name}</div>
+                  <div className="sr-meta">{match.wine.appellation} · {match.wine.vintage} · {COLOR_LABEL[match.wine.color]}</div>
+                </div>
+                <div className="sr-qty"><div style={{fontSize:'.6rem',color:'var(--text3)',marginBottom:2}}>En cave</div>{match.wine.qty}</div>
+              </div>
+              <div className="sr-conf">
+                <span className="conf-lbl">Confiance OCR</span>
+                <div className="conf-bar"><div className="conf-fill" style={{width:`${match.confidence}%`}}/></div>
+                <span className="conf-lbl">{match.confidence}%</span>
+              </div>
+            </div>
+            <div style={{fontSize:'.72rem',color:'var(--text3)',textAlign:'center',margin:'10px 0 4px'}}>
+              Pas le bon vin ? <span style={{color:'var(--gold)',cursor:'pointer',textDecoration:'underline'}} onClick={reset}>Réessayer</span>
+            </div>
+            <div className="sr-actions">
+              <button className="btn btn-ghost" style={{flexShrink:0,padding:'10px'}} onClick={onCancel}>✕</button>
+              <button className="btn btn-ghost" onClick={()=>onSimpleOut(match.wine)}>− Sortie simple</button>
+              <button className="btn btn-sante" onClick={()=>onSante(match.wine)}>Santé !</button>
+            </div>
+          </div>
+        )}
+
+        {step==='notfound'&&(
+          <div style={{textAlign:'center',padding:'24px'}}>
+            <div style={{fontSize:'1.1rem',marginBottom:10,opacity:.4,letterSpacing:'.05em',textTransform:'uppercase'}}>—</div>
+            <h4 style={{fontFamily:"'Inter',system-ui,sans-serif",fontSize:'.95rem',color:'var(--text2)',marginBottom:6}}>Vin non reconnu</h4>
+            <p style={{fontSize:'.78rem',color:'var(--text3)',lineHeight:1.5}}>L'étiquette n'a pas pu être associée à un vin de votre cave.</p>
+            <div style={{display:'flex',gap:9,marginTop:16,justifyContent:'center'}}>
+              <button className="btn btn-ghost btn-sm" onClick={reset}>↺ Réessayer</button>
+              <button className="btn btn-ghost btn-sm" onClick={onCancel}>Annuler</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── SANTÉ MODAL ─── */
+function SanteModal({wine,onConfirm,onCancel}) {
+  const today = new Date().toISOString().split('T')[0];
+  const [form,setForm] = useState({date:today,companions:'',notes:'',rating:0});
+  const [hs,setHs] = useState(0);
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+  return (
+    <div className="modal-ov" onClick={e=>e.target===e.currentTarget&&onCancel()}>
+      <div className="modal">
+        <div className="modal-handle"/>
+        <div className="modal-title">Santé !</div>
+        <div className="modal-sub">Enregistrez cette dégustation dans votre journal</div>
+        <div className="wine-badge">
+          <div style={{width:32,height:32,borderRadius:8,background:'var(--wine-m)',flexShrink:0}}></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div className="wb-name">{wine.name}</div>
+            <div className="wb-vintage">{wine.appellation} · {wine.vintage}</div>
+          </div>
+          <div style={{background:'var(--wine-m)',borderRadius:8,padding:'4px 10px',fontSize:'.8rem',color:'var(--gold)'}}>−1 btl</div>
+        </div>
+        <div className="modal-fields">
+          <div className="mf">
+            <label className="mf-lbl">Date de dégustation</label>
+            <input type="date" className="minput" value={form.date} onChange={e=>set('date',e.target.value)} style={{colorScheme:'dark'}}/>
+          </div>
+          <div className="mf">
+            <label className="mf-lbl">👥 Partagé avec</label>
+            <input className="minput" placeholder="Seul · Noms des convives…" value={form.companions} onChange={e=>set('companions',e.target.value)}/>
+          </div>
+          <div className="mf">
+            <label className="mf-lbl">Note</label>
+            <div className="mrating">
+              {[1,2,3,4,5].map(i=>(
+                <span key={i} className={`mstar ${(hs||form.rating)>=i?'on':''}`}
+                  onMouseEnter={()=>setHs(i)} onMouseLeave={()=>setHs(0)}
+                  onClick={()=>set('rating',i)}>★</span>
+              ))}
+            </div>
+          </div>
+          <div className="mf">
+            <label className="mf-lbl">📝 Commentaires</label>
+            <textarea className="mtarea" rows={3} placeholder="Arômes, texture, accord mets-vins…"
+              value={form.notes} onChange={e=>set('notes',e.target.value)}/>
+          </div>
+        </div>
+        <div className="modal-actions">
+          <button className="btn btn-ghost" onClick={onCancel}>Annuler</button>
+          <button className="btn btn-sante" onClick={()=>onConfirm(form)}>Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── SIDEBAR ─── */
+function Sidebar({view,setView,wines,tastings,sync}) {
+  const total = wines.reduce((a,w)=>a+w.qty,0);
+  return (
+    <div className="sidebar">
+      <div className="sb-logo">
+        <h1>CaveBook</h1>
+        <span>Gestion de cave</span>
+      </div>
+      <nav className="sb-nav">
+        {[
+          {id:'dashboard',icon:'⊙',label:'Tableau de bord'},
+          {id:'cave',icon:'⊞',label:'Ma Cave'},
+          {id:'tastings',icon:'🌿',label:'Dégustations'},
+          {id:'add',icon:'+',label:'Ajouter un vin'},
+        ].map(n=>(
+          <button key={n.id} className={`nav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}>
+            {n.label}
+            {n.id==='tastings'&&tastings.length>0&&
+              <span style={{marginLeft:'auto',background:'var(--wine-m)',color:'var(--gold)',fontSize:'.63rem',padding:'1px 7px',borderRadius:10}}>{tastings.length}</span>}
+          </button>
+        ))}
+      </nav>
+      <div className="sb-stats">
+        {[['Bouteilles',total],['Références',wines.length],['Dégustations',tastings.length]].map(([l,v])=>(
+          <div className="stat-pill" key={l}>
+            <span className="stat-pill-l">{l}</span>
+            <span className="stat-pill-v">{v}</span>
+          </div>
+        ))}
+        <div className="sync-row">
+          <SyncDot state={sync}/>
+          <span className="sync-label">
+            {sync==='online'?'Synchronisé':sync==='syncing'?'Sync…':'Hors ligne'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BottomNav({view,setView}) {
+  return (
+    <div className="bnav">
+      <div className="bnav-inner">
+        <button className={`bnav-item ${view==='dashboard'?'active':''}`} onClick={()=>setView('dashboard')}>
+          Tableau
+        </button>
+        <button className={`bnav-item ${view==='cave'?'active':''}`} onClick={()=>setView('cave')}>
+          Cave
+        </button>
+        <button className={`bnav-item ${view==='tastings'?'active':''}`} onClick={()=>setView('tastings')}>
+          Journal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── DASHBOARD ─── */
+function Dashboard({wines,tastings,onUpdateWine,onSante,onOpenScan}) {
+  const total = wines.reduce((a,w)=>a+w.qty,0);
+  const totalVal = wines.reduce((a,w)=>a+w.qty*w.price,0);
+  const byR = ['Bordeaux','Bourgogne','Rhône','Loire','Champagne','Provence','Alsace','Languedoc','Étranger']
+    .map(r=>({r,c:wines.filter(w=>w.region===r).reduce((a,w)=>a+w.qty,0)}))
+    .filter(x=>x.c>0);
+  const maxR = Math.max(...byR.map(x=>x.c),1);
+  const hist = [
+    ...wines.flatMap(w=>w.history.map(h=>({...h,wine:w.name}))),
+    ...tastings.map(t=>({type:'sante',wine:t.wineName,qty:t.qty,date:t.date,note:t.companions?'avec '+t.companions:''}))
+  ].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const top = [...wines].sort((a,b)=>b.qty-a.qty).slice(0,5);
+  const quickOut = w => {
+    if(w.qty<=0) return;
+    const h={type:'out',qty:1,date:new Date().toISOString().split('T')[0],note:'Sortie rapide'};
+    onUpdateWine({...w,qty:w.qty-1,history:[...w.history,h]});
+  };
+  return (
+    <div>
+      <div className="kpi-grid">
+        {[
+          {l:'Bouteilles',v:total,s:`${wines.length} références`,i:'🍾'},
+          {l:'Valeur estimée',v:`${totalVal.toLocaleString('fr-FR')} €`,s:"Prix d'achat",i:'💰'},
+          {l:'Dégustations',v:tastings.length,s:'dans le journal',i:'🌿'},
+          {l:'Millésime moy.',v:wines.length?Math.round(wines.reduce((a,w)=>a+w.vintage,0)/wines.length):'—',s:'Tous vins',i:'📅'},
+        ].map(({l,v,s,i})=>(
+          <div className="kpi-card" key={l}>
+            <div className="kpi-lbl">{l}</div>
+            <div className="kpi-val">{v}</div>
+            <div className="kpi-sub">{s}</div>
+            <div className="kpi-icon">{i}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="scan-banner" onClick={onOpenScan}>
+        <div className="sb-ico">📷</div>
+        <div className="sb-txt">
+          <div className="sb-title">Scanner une étiquette pour sortir</div>
+          <div className="sb-sub">Photo → identification → sortie ou Santé !</div>
+        </div>
+        <div className="sb-arr">›</div>
+      </div>
+
+      <div className="dash-grid">
+        <div className="dash-card">
+          <h3>Sortie rapide</h3>
+          <div className="qe-list">
+            {top.map(w=>(
+              <div className="qe-item" key={w.id}>
+                <div className={`qe-dot ${COLOR_DOT[w.color]}`}/>
+                <div className="qe-info">
+                  <div className="qe-name">{w.name}</div>
+                  <div className="qe-meta">{w.vintage} · {w.region}</div>
+                </div>
+                <div className="qe-qty">{w.qty}</div>
+                <button className="qe-btn qe-sante" onClick={()=>onSante(w)} disabled={w.qty===0} title="Santé !">S</button>
+                <button className="qe-btn" onClick={()=>quickOut(w)} disabled={w.qty===0} title="−1">−</button>
+              </div>
+            ))}
+            {top.length===0&&<div style={{fontSize:'.82rem',color:'var(--text3)',textAlign:'center',padding:'14px'}}>Aucun vin en cave</div>}
+          </div>
+        </div>
+
+        <div className="dash-card">
+          <h3>Par région</h3>
+          <div className="region-bar">
+            {byR.map(({r,c})=>(
+              <div className="region-row" key={r}>
+                <div className="region-name">{r}</div>
+                <div className="bar-track"><div className="bar-fill" style={{width:`${(c/maxR)*100}%`}}/></div>
+                <div className="region-ct">{c}</div>
+              </div>
+            ))}
+            {byR.length===0&&<div style={{fontSize:'.78rem',color:'var(--text3)'}}>Ajoutez vos premiers vins</div>}
+          </div>
+        </div>
+
+        <div className="dash-card" style={{gridColumn:'1/-1'}}>
+          <h3>Activité récente</h3>
+          <div className="act-list">
+            {hist.map((h,i)=>(
+              <div className="act-item" key={i}>
+                <div className={`act-badge ${h.type==='in'?'b-in':h.type==='sante'?'b-sante':'b-out'}`}>
+                  {h.type==='in'?'↓':h.type==='sante'?'S':'↑'}
+                </div>
+                <div className="act-name">{h.wine} × {h.qty}{h.note?` — ${h.note}`:''}</div>
+                <div className="act-date">{h.date}</div>
+              </div>
+            ))}
+            {hist.length===0&&<div style={{fontSize:'.8rem',color:'var(--text3)'}}>Aucune activité récente</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── TASTINGS VIEW ─── */
+function TastingsView({tastings,onDelete}) {
+  const [filter,setFilter] = useState('all');
+  const sorted = [...tastings]
+    .filter(t=>filter==='all'||t.wineColor===filter)
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  return (
+    <div>
+      <div className="t-filters">
+        {[['all','Tout'],['red','Rouges'],['white','Blancs'],['sparkling','Pétillants'],['rose','Rosés']].map(([v,l])=>(
+          <button key={v} className={`t-chip ${filter===v?'active':''}`} onClick={()=>setFilter(v)}>{l}</button>
+        ))}
+      </div>
+      {sorted.length===0?(
+        <div className="t-empty">
+          <div className="t-empty-ico"></div>
+          <h3 style={{fontFamily:"'Inter',system-ui,sans-serif",fontSize:'1rem',color:'var(--text2)',marginBottom:6}}>Aucune dégustation enregistrée</h3>
+          <p style={{fontSize:'.8rem',color:'var(--text3)',lineHeight:1.6}}>Ouvrez une bouteille et appuyez sur <strong style={{color:'var(--gold)'}}>Santé !</strong></p>
+        </div>
+      ):(
+        <div className="tlist">
+          {sorted.map(t=>(
+            <div className="tcard" key={t.id}>
+              <div className="tc-head">
+                <div style={{width:8,height:8,borderRadius:'50%',background:'var(--gold)',flexShrink:0,marginTop:6}}></div>
+                <div className="tc-head-info">
+                  <div className="tc-name">{t.wineName}</div>
+                  <div className="tc-meta">
+                    <span>{t.date}</span>
+                    <span>{t.wineVintage}</span>
+                    <span style={{color:t.wineColor==='red'?'#c07080':t.wineColor==='white'?'#c8b97a':'#b8d4e8'}}>
+                      ● {COLOR_LABEL[t.wineColor]||t.wineColor}
+                    </span>
+                  </div>
+                  {t.rating>0&&(
+                    <div className="tc-stars">
+                      {[1,2,3,4,5].map(i=><span key={i} className={`t-star ${t.rating>=i?'on':''}`}>★</span>)}
+                    </div>
+                  )}
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{padding:'5px 9px',fontSize:'.72rem',flexShrink:0}} onClick={()=>onDelete(t.id)}>✕</button>
+              </div>
+              {(t.companions||t.notes)&&<>
+                <div className="tc-div"/>
+                <div className="tc-body">
+                  {t.companions&&<div className="tc-companions"><span>👥</span><span style={{fontSize:'.79rem',color:'var(--text2)'}}>{t.companions}</span></div>}
+                  {t.notes&&<div className="tc-notes">« {t.notes} »</div>}
+                </div>
+              </>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── WINE DETAIL ─── */
+function WineDetail({wine,onClose,onUpdate,onDelete,onSante}) {
+  const [notes,setNotes] = useState(wine.notes);
+  const [qty,setQty] = useState(wine.qty);
+  const [rating,setRating] = useState(wine.rating);
+  const [mn,setMn] = useState('');
+
+  const handleQtyChange = delta => {
+    const nq = Math.max(0,qty+delta);
+    const h = {type:delta>0?'in':'out',qty:Math.abs(delta),date:new Date().toISOString().split('T')[0],note:mn};
+    setQty(nq); setMn('');
+    onUpdate({...wine,qty:nq,notes,rating,history:[...wine.history,h]});
+  };
+
+  const ot = wine.origineType
+    ? `${ORIGINE_LABEL[wine.origineType]||wine.origineType}${wine.origineDetail?' · '+wine.origineDetail:''}`
+    : '—';
+  const df = wine.dateAchat
+    ? new Date(wine.dateAchat).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})
+    : null;
+
+  return (
+    <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="detail-panel">
+        <div className="dp-header">
+          <div className="dp-header-bg"/>
+          <button className="dp-close" onClick={onClose}>✕</button>
+          <div className="dp-header-c">
+            <div className={`color-tag ${COLOR_TAG[wine.color]||'tag-red'}`}>● {COLOR_LABEL[wine.color]}</div>
+            <div className="dp-name">{wine.name}</div>
+            <div className="dp-vintage">{wine.appellation} · {wine.vintage}</div>
+          </div>
+        </div>
+        <div className="dp-body">
+          <div style={{marginBottom:18}}>
+            <button className="btn btn-sante" style={{width:'100%',justifyContent:'center',fontSize:'1rem'}}
+              disabled={qty===0} onClick={()=>{onSante(wine);onClose();}}>
+              Santé ! — Ouvrir cette bouteille
+            </button>
+            {qty===0&&<p style={{fontSize:'.7rem',color:'var(--text3)',textAlign:'center',marginTop:5}}>Plus de bouteilles en cave</p>}
+          </div>
+
+          <div className="dp-sec">
+            <div className="dp-sec-title">Informations</div>
+            <div className="info-grid">
+              <div className="ii"><div className="ii-lbl">Région</div><div className="ii-val">{wine.region}</div></div>
+              <div className="ii"><div className="ii-lbl">Producteur</div><div className="ii-val">{wine.producer||'—'}</div></div>
+              <div className="ii"><div className="ii-lbl">Cépages</div><div className="ii-val">{wine.grapes||'—'}</div></div>
+              <div className="ii"><div className="ii-lbl">Prix d'achat</div><div className="ii-val">{wine.price?`${wine.price} €`:'—'}</div></div>
+              {df&&<div className="ii"><div className="ii-lbl">Enregistré le</div><div className="ii-val">{df}</div></div>}
+              <div className="ii full"><div className="ii-lbl">Origine</div><div className="ii-val">{ot}</div></div>
+            </div>
+          </div>
+
+          <div className="dp-sec">
+            <div className="dp-sec-title">Gestion du stock</div>
+            <div className="qty-ctrl">
+              <button className="qty-btn" onClick={()=>handleQtyChange(-1)}>−</button>
+              <div className="qty-disp">{qty}</div>
+              <button className="qty-btn" onClick={()=>handleQtyChange(1)}>+</button>
+              <span style={{fontSize:'.72rem',color:'var(--text3)'}}>bouteilles</span>
+            </div>
+            <input className="fi" style={{marginTop:9}} placeholder="Note de mouvement…" value={mn} onChange={e=>setMn(e.target.value)}/>
+          </div>
+
+          <div className="dp-sec">
+            <div className="dp-sec-title">Ma note</div>
+            <Stars rating={rating} onRate={r=>{setRating(r);onUpdate({...wine,qty,notes,rating:r});}}/>
+          </div>
+
+          <div className="dp-sec">
+            <div className="dp-sec-title">Notes de dégustation</div>
+            <textarea className="notes-area" placeholder="Arômes, structure, accords, potentiel de garde…" value={notes} onChange={e=>setNotes(e.target.value)}/>
+            <button className="btn btn-ghost btn-sm" style={{marginTop:8}} onClick={()=>onUpdate({...wine,qty,notes,rating})}>Sauvegarder</button>
+          </div>
+
+          <div className="dp-sec">
+            <div className="dp-sec-title">Historique</div>
+            <div className="hist-list">
+              {[...wine.history].reverse().map((h,i)=>(
+                <div className="hist-item" key={i}>
+                  <div className={`hist-dot ${h.type}`}/>
+                  <div className="hist-c">
+                    <div className="hist-action">
+                      {h.type==='in'?'Entrée':h.type==='sante'?'Dégustation':'Sortie'} {h.qty} btl
+                      {h.note&&<span style={{color:'var(--text3)',fontStyle:'italic'}}> — {h.note}</span>}
+                    </div>
+                    <div className="hist-date">{h.date}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{marginTop:20,paddingTop:13,borderTop:'1px solid var(--border)'}}>
+            <button className="btn btn-danger btn-sm" onClick={()=>{onDelete(wine.id);onClose();}}>Supprimer ce vin</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── CAVE VIEW ─── */
+function CaveView({wines,onSelect,onOpenScan}) {
+  const [search,setSearch] = useState('');
+  const [fc,setFc] = useState('all');
+  const [fr,setFr] = useState('all');
+  const [vm,setVm] = useState('grid');
+  const filtered = wines.filter(w=>{
+    const q = search.toLowerCase();
+    const ms = !q
+      ||w.name.toLowerCase().includes(q)
+      ||w.appellation.toLowerCase().includes(q)
+      ||w.producer.toLowerCase().includes(q)
+      ||String(w.vintage).includes(q)
+      ||(w.origineDetail||'').toLowerCase().includes(q);
+    return ms&&(fc==='all'||w.color===fc)&&(fr==='all'||w.region===fr);
+  });
+  const regions = [...new Set(wines.map(w=>w.region))];
+  return (
+    <div>
+      <div className="list-controls">
+        <div className="search-box">
+          <span style={{color:'var(--text3)',fontSize:'.8rem'}}>↳</span>
+          <input placeholder="Vin, appellation, producteur…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <select className="fsel" value={fc} onChange={e=>setFc(e.target.value)}>
+          <option value="all">Couleurs</option>
+          <option value="red">Rouge</option>
+          <option value="white">Blanc</option>
+          <option value="rose">Rosé</option>
+          <option value="sparkling">Pétillant</option>
+        </select>
+        <select className="fsel" value={fr} onChange={e=>setFr(e.target.value)}>
+          <option value="all">Régions</option>
+          {regions.map(r=><option key={r} value={r}>{r}</option>)}
+        </select>
+        <div className="view-toggle">
+          <button className={`vbtn ${vm==='grid'?'active':''}`} onClick={()=>setVm('grid')}>⊞</button>
+          <button className={`vbtn ${vm==='table'?'active':''}`} onClick={()=>setVm('table')}>☰</button>
+        </div>
+      </div>
+
+      <div className="scan-banner" onClick={onOpenScan} style={{marginBottom:14}}>
+        <div className="sb-ico">📷</div>
+        <div className="sb-txt">
+          <div className="sb-title">Scanner pour sortir une bouteille</div>
+          <div className="sb-sub">Reconnaissance d'étiquette instantanée</div>
+        </div>
+        <div className="sb-arr">›</div>
+      </div>
+
+      {filtered.length===0&&(
+        <div className="empty-state">
+          <div className="empty-ico"></div>
+          <h3>Aucun vin trouvé</h3>
+          <p style={{fontSize:'.8rem',marginTop:4}}>Modifiez vos filtres ou ajoutez un vin.</p>
+        </div>
+      )}
+
+      {vm==='grid'&&filtered.length>0&&(
+        <div className="wine-grid">
+          {filtered.map(w=>(
+            <div className="wine-card" key={w.id} onClick={()=>onSelect(w)}>
+              <div className="wc-img">
+                {w.img?<img src={w.img} alt={w.name}/>:<span className="wc-ico"></span>}
+                <div className={`wc-dot ${COLOR_DOT[w.color]}`}/>
+              </div>
+              <div className="wc-body">
+                <div className="wc-name">{w.name}</div>
+                <div className="wc-meta">{w.appellation} · {w.vintage}</div>
+                {w.origineType&&<div className="wc-meta">{ORIGINE_LABEL[w.origineType]}{w.origineDetail&&` · ${w.origineDetail}`}</div>}
+                <div className="wc-foot">
+                  <div><div className="wc-qty">{w.qty}</div><div className="wc-qty-l">bouteilles</div></div>
+                  <div className="stars">{[1,2,3,4,5].map(i=><span key={i} className={`star ${w.rating>=i?'on':''}`}>★</span>)}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {vm==='table'&&filtered.length>0&&(
+        <div className="dash-card" style={{padding:0,overflowX:'auto'}}>
+          <table className="wine-table">
+            <thead>
+              <tr><th>Nom</th><th>Région</th><th>Mill.</th><th>Origine</th><th>Qté</th><th>★</th></tr>
+            </thead>
+            <tbody>
+              {filtered.map(w=>(
+                <tr key={w.id} onClick={()=>onSelect(w)}>
+                  <td>{w.name}</td>
+                  <td>{w.region}</td>
+                  <td>{w.vintage}</td>
+                  <td>{w.origineType?`${ORIGINE_LABEL[w.origineType]}${w.origineDetail?' · '+w.origineDetail:''}` :'—'}</td>
+                  <td style={{color:'var(--gold)',fontWeight:600}}>{w.qty}</td>
+                  <td>{'★'.repeat(w.rating)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── ADD FORM ─── */
+function AddWineForm({onAdd,onCancel}) {
+  const today = new Date().toISOString().split('T')[0];
+  const [scanning,setScanning] = useState(false);
+  const [scanned,setScanned] = useState(false);
+  const [imgFile,setImgFile] = useState(null);
+  const [imgSrc,setImgSrc] = useState(null);
+  const [form,setForm] = useState({
+    name:'',appellation:'',vintage:new Date().getFullYear(),
+    color:'red',region:'Bordeaux',producer:'',grapes:'',
+    price:'',qty:1,origineType:'caviste',origineDetail:'',dateAchat:today,notes:''
+  });
+  const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  const simulateScan = () => {
+    setScanning(true);
+    setTimeout(()=>{
+      setScanning(false);setScanned(true);
+      setForm(f=>({...f,name:'Gevrey-Chambertin VV',appellation:'Gevrey-Chambertin',
+        vintage:2019,color:'red',region:'Bourgogne',producer:'Rossignol-Trapet',grapes:'Pinot Noir',price:'42'}));
+    },1800);
+  };
+
+  const handleFile = e => {
+    const f = e.target.files?.[0]; if(!f) return;
+    setImgFile(f);
+    const r = new FileReader();
+    r.onload = ev => setImgSrc(ev.target.result);
+    r.readAsDataURL(f);
+  };
+
+  const handleSubmit = () => {
+    if(!form.name.trim()) return;
+    onAdd({
+      ...form,
+      vintage:parseInt(form.vintage)||new Date().getFullYear(),
+      price:parseFloat(form.price)||0,
+      qty:parseInt(form.qty)||1,
+      imgFile, imgSrc,
+      history:[{type:'in',qty:parseInt(form.qty)||1,date:form.dateAchat||today,note:'Ajout initial'}],
+    });
+  };
+
+  const origPlaceholder = {caviste:'Nom du caviste…',viticulteur:'Nom du domaine…',cadeau:'Offert par…',autre:'Précisions…'};
+
+  return (
+    <div className="form-wrap">
+      <div className="form-panel">
+        <div className="form-title">Enregistrer un nouveau vin</div>
+
+        <div className="ff full" style={{marginBottom:13}}>
+          <div className="fl">Photo de l'étiquette</div>
+          <div className="pzone">
+            <input type="file" accept="image/*" capture="environment" onChange={handleFile}/>
+            {imgSrc?<img src={imgSrc} alt="" className="pzone-preview"/>:<><div className="pzone-ico">📷</div><div className="pzone-lbl">Photographier ou importer</div></>}
+          </div>
+          <div style={{marginTop:7,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+            <span className={`scan-badge ${scanning?'scanning':''}`} onClick={!scanning?simulateScan:undefined}>
+              {scanning?'Analyse…':scanned?'✓ Reconnue':'Reconnaître l\'étiquette'}
+            </span>
+            {imgFile&&<span style={{fontSize:'.67rem',color:'#6abf8e'}}>Photo prête à l'envoi</span>}
+          </div>
+        </div>
+
+        <div className="fg">
+          <div className="ff full"><label className="fl">Nom du vin *</label><input className="fi" value={form.name} onChange={e=>set('name',e.target.value)} placeholder="ex. Château Margaux"/></div>
+          <div className="ff"><label className="fl">Appellation</label><input className="fi" value={form.appellation} onChange={e=>set('appellation',e.target.value)} placeholder="ex. Margaux"/></div>
+          <div className="ff"><label className="fl">Millésime</label><input className="fi" type="number" value={form.vintage} onChange={e=>set('vintage',e.target.value)} min="1900" max="2030"/></div>
+          <div className="ff">
+            <label className="fl">Couleur</label>
+            <select className="fsel2" value={form.color} onChange={e=>set('color',e.target.value)}>
+              <option value="red">Rouge</option><option value="white">Blanc</option><option value="rose">Rosé</option><option value="sparkling">Pétillant</option>
+            </select>
+          </div>
+          <div className="ff">
+            <label className="fl">Région</label>
+            <select className="fsel2" value={form.region} onChange={e=>set('region',e.target.value)}>
+              {REGIONS.map(r=><option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div className="ff"><label className="fl">Producteur</label><input className="fi" value={form.producer} onChange={e=>set('producer',e.target.value)} placeholder="Domaine / Château"/></div>
+          <div className="ff"><label className="fl">Cépages</label><input className="fi" value={form.grapes} onChange={e=>set('grapes',e.target.value)} placeholder="ex. Pinot Noir"/></div>
+          <div className="ff"><label className="fl">Prix (€)</label><input className="fi" type="number" value={form.price} onChange={e=>set('price',e.target.value)} placeholder="0"/></div>
+          <div className="ff"><label className="fl">Quantité</label><input className="fi" type="number" value={form.qty} onChange={e=>set('qty',e.target.value)} min="1"/></div>
+          <div className="ff full">
+            <label className="fl">Date d'enregistrement en cave</label>
+            <input type="date" className="fi" value={form.dateAchat} onChange={e=>set('dateAchat',e.target.value)} style={{colorScheme:'dark'}}/>
+          </div>
+          <div className="ff full">
+            <label className="fl">Origine</label>
+            <div className="origine-btns">
+              {Object.entries(ORIGINE_LABEL).map(([k,l])=>(
+                <button key={k} className={`ob ${form.origineType===k?'sel':''}`} onClick={()=>set('origineType',k)}>{l}</button>
+              ))}
+            </div>
+            <input className="fi" value={form.origineDetail} onChange={e=>set('origineDetail',e.target.value)} placeholder={origPlaceholder[form.origineType]}/>
+          </div>
+          <div className="ff full">
+            <label className="fl">Notes</label>
+            <textarea className="notes-area" value={form.notes} onChange={e=>set('notes',e.target.value)} placeholder="Premières impressions…"/>
+          </div>
+        </div>
+
+        <div className="form-actions">
+          <button className="btn btn-ghost" onClick={onCancel}>Annuler</button>
+          <button className="btn btn-gold" onClick={handleSubmit}>Enregistrer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── APP ─── */
+function App() {
+  const [wines,setWines]       = useState(()=>localGet('cb_wines',[]));
+  const [tastings,setTastings] = useState(()=>localGet('cb_tastings',[]));
+  const [loading,setLoading]   = useState(true);
+  const [sync,setSync]         = useState('syncing');
+  const [view,setView]         = useState('dashboard');
+  const [selected,setSelected] = useState(null);
+  const [santeWine,setSante]   = useState(null);
+  const [showScan,setShowScan] = useState(false);
+  const [toast,setToast]       = useState(null);
+
+  const showToast = (msg,icon='✓') => setToast({msg,icon,key:Date.now()});
+
+  /* LOAD FROM SUPABASE */
+  useEffect(()=>{
+    (async()=>{
+      try {
+        setSync('syncing');
+        const tout = new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),7000));
+        const [wRes,tRes] = await Promise.race([
+          Promise.all([
+            db.from('wines').select('*').order('created_at',{ascending:true}),
+            db.from('tastings').select('*').order('created_at',{ascending:true}),
+          ]),
+          tout.then(()=>{throw new Error('timeout')})
+        ]);
+        if(wRes.error) throw wRes.error;
+        if(tRes.error) throw tRes.error;
+        const wl = (wRes.data||[]).map(dbToWine);
+        const tl = (tRes.data||[]).map(dbToTasting);
+        setWines(wl); localSet('cb_wines',wl);
+        setTastings(tl); localSet('cb_tastings',tl);
+        setSync('online');
+      } catch(e) {
+        console.warn('Supabase offline, using local cache:', e.message);
+        setSync('offline');
+      }
+      setLoading(false);
+    })();
+  },[]);
+
+  /* SYNC WINE */
+  const syncWine = async w => {
+    try { await db.from('wines').upsert(wineToDb(w),{onConflict:'id'}); setSync('online'); }
+    catch { setSync('offline'); }
+  };
+
+  /* ADD WINE */
+  const addWine = async wineData => {
+    const id = uid();
+    let imgUrl = null;
+
+    if(wineData.imgFile) {
+      try {
+        setSync('syncing');
+        imgUrl = await uploadPhoto(wineData.imgFile, id);
+        showToast('Photo enregistrée dans Supabase','✓');
+      } catch(e) {
+        imgUrl = wineData.imgSrc||null;
+        showToast('Photo en local (hors ligne)','✓');
+      }
+    } else {
+      imgUrl = wineData.imgSrc||null;
+    }
+
+    const {imgFile:_f,imgSrc:_s,...rest} = wineData;
+    const wine = {...rest, id, img:imgUrl, rating:0};
+    const newWines = [...wines, wine];
+    setWines(newWines); localSet('cb_wines',newWines);
+    setView('cave');
+    showToast(`« ${wine.name} » ajouté !`,'✓');
+    db.from('wines').insert(wineToDb(wine))
+      .then(()=>setSync('online'))
+      .catch(()=>setSync('offline'));
+  };
+
+  /* UPDATE WINE */
+  const updateWine = w => {
+    const updated = wines.map(x=>x.id===w.id?w:x);
+    setWines(updated); localSet('cb_wines',updated);
+    syncWine(w);
+  };
+
+  /* DELETE WINE */
+  const deleteWine = async id => {
+    const wine = wines.find(w=>w.id===id);
+    const updated = wines.filter(w=>w.id!==id);
+    setWines(updated); localSet('cb_wines',updated);
+    showToast('Vin supprimé','✓');
+    try {
+      await db.from('wines').delete().eq('id',String(id));
+      if(wine?.img && wine.img.includes('/labels/')) {
+        const path = decodeURIComponent(wine.img.split('/labels/')[1]?.split('?')[0]||'');
+        if(path) await db.storage.from('labels').remove([path]);
+      }
+      setSync('online');
+    } catch { setSync('offline'); }
+  };
+
+  /* SANTÉ */
+  const handleSanteConfirm = form => {
+    const h = {type:'sante',qty:1,date:form.date,note:form.companions?'avec '+form.companions:''};
+    updateWine({...santeWine,qty:Math.max(0,santeWine.qty-1),history:[...santeWine.history,h]});
+    const tasting = {
+      id:uid(), wineId:santeWine.id, wineName:santeWine.name,
+      wineAppellation:santeWine.appellation, wineVintage:santeWine.vintage,
+      wineColor:santeWine.color, date:form.date, companions:form.companions,
+      rating:form.rating, notes:form.notes, qty:1,
+    };
+    const newTastings = [...tastings,tasting];
+    setTastings(newTastings); localSet('cb_tastings',newTastings);
+    db.from('tastings').insert(tastingToDb(tasting)).then(()=>setSync('online')).catch(()=>setSync('offline'));
+    setSante(null);
+    showToast('Dégustation enregistrée','✓');
+    setView('tastings');
+  };
+
+  /* DELETE TASTING */
+  const deleteTasting = id => {
+    const updated = tastings.filter(t=>t.id!==id);
+    setTastings(updated); localSet('cb_tastings',updated);
+    db.from('tastings').delete().eq('id',String(id)).then(()=>setSync('online')).catch(()=>{});
+  };
+
+  /* SCAN OUT */
+  const handleScanOut = wine => {
+    const h = {type:'out',qty:1,date:new Date().toISOString().split('T')[0],note:'Sortie par scan'};
+    updateWine({...wine,qty:Math.max(0,wine.qty-1),history:[...wine.history,h]});
+    setShowScan(false);
+    showToast(`${wine.name} — 1 btl sortie`,'✓');
+  };
+
+  const titles = {
+    dashboard: <><em>Tableau</em> de bord</>,
+    cave:      <><em>Ma</em> Cave</>,
+    tastings:  <><em>Journal</em> de dégustation</>,
+    add:       <><em>Ajouter</em> un vin</>,
+  };
+
+  if(loading) return (
+    <>
+      <style>{CSS}</style>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'100dvh',gap:16,background:'var(--bg)'}}>
+        <style>{'@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}'}</style>
+        <div style={{width:48,height:48,borderRadius:12,background:'var(--wine)',animation:'pulse 1.5s infinite'}}></div>
+        <div style={{fontFamily:"'Inter',system-ui,sans-serif",fontSize:'1.3rem',fontWeight:600,color:'var(--gold)',letterSpacing:'.04em'}}>CaveBook</div>
+        <div style={{fontSize:'.75rem',color:'var(--text3)'}}>Connexion à la cave…</div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <style>{CSS}</style>
+      <div className="app">
+        <Sidebar view={view} setView={setView} wines={wines} tastings={tastings} sync={sync}/>
+        <div className="main">
+          <div className="topbar">
+            <div className="topbar-l">
+              <div className="topbar-title">{titles[view]}</div>
+              <SyncDot state={sync}/>
+            </div>
+            <div className="topbar-a">
+              <button className="btn btn-ghost btn-sm" onClick={()=>setShowScan(true)} title="Scanner une étiquette">📷</button>
+              {view!=='add'&&<button className="btn btn-gold btn-sm" onClick={()=>setView('add')}>+ Ajouter</button>}
+            </div>
+          </div>
+          <div className="content">
+            {view==='dashboard'&&(
+              <Dashboard wines={wines} tastings={tastings}
+                onUpdateWine={updateWine} onSante={w=>setSante(w)} onOpenScan={()=>setShowScan(true)}/>
+            )}
+            {view==='cave'&&(
+              <CaveView wines={wines} onSelect={w=>setSelected(w)} onOpenScan={()=>setShowScan(true)}/>
+            )}
+            {view==='tastings'&&<TastingsView tastings={tastings} onDelete={deleteTasting}/>}
+            {view==='add'&&<AddWineForm onAdd={addWine} onCancel={()=>setView('cave')}/>}
+          </div>
+        </div>
+        <BottomNav view={view} setView={setView}/>
+      </div>
+
+      {selected&&(
+        <WineDetail
+          wine={wines.find(w=>w.id===selected.id)||selected}
+          onClose={()=>setSelected(null)}
+          onUpdate={w=>{updateWine(w);setSelected(w);}}
+          onDelete={id=>{deleteWine(id);setSelected(null);}}
+          onSante={w=>{setSelected(null);setSante(w);}}
+        />
+      )}
+      {showScan&&(
+        <ScanExitModal wines={wines}
+          onSimpleOut={handleScanOut}
+          onSante={w=>{setShowScan(false);setSante(w);}}
+          onCancel={()=>setShowScan(false)}/>
+      )}
+      {santeWine&&(
+        <SanteModal wine={santeWine} onConfirm={handleSanteConfirm} onCancel={()=>setSante(null)}/>
+      )}
+      {toast&&<Toast key={toast.key} msg={toast.msg} icon={toast.icon} onDone={()=>setToast(null)}/>}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
